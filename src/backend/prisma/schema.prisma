@@ -1,0 +1,142 @@
+// ModuleForge Database Schema
+// Prisma schema for PostgreSQL (Supabase/Neon)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// User Authentication
+// ============================================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  displayName       String
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relations
+  ownedWorlds       World[]   @relation("OwnedWorlds")
+}
+
+// ============================================
+// World (Container for Entries)
+// ============================================
+
+model World {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  content       String    @db.Text
+  metadata      Json?
+  coverImageUrl String?
+  visibility    String    @default("private")
+  ownerId       String
+  owner         User      @relation("OwnedWorlds", fields: [ownerId], references: [id], onDelete: Cascade)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  entries         Entry[]
+  relationships   EntryRelationship[]
+  loreArticles    LoreArticle[]
+  timelineEvents  TimelineEvent[]
+}
+
+// ============================================
+// Entry (Content Items Within World)
+// ============================================
+
+model Entry {
+  id            String    @id @default(cuid())
+  worldId       String
+  world         World     @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  type          String    // character, location, item, faction, event, lore
+  title         String
+  description   String?
+  content       String    @db.Text
+  metadata      Json?
+  coverImageUrl String?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  sourceRelations EntryRelationship[] @relation("SourceRelations")
+  targetRelations EntryRelationship[] @relation("TargetRelations")
+
+  @@index([worldId])
+}
+
+// ============================================
+// Entry Relationships (Connections Between Entries)
+// ============================================
+
+model EntryRelationship {
+  id        String   @id @default(cuid())
+  sourceId  String
+  targetId  String
+  worldId   String
+  label     String?  // Optional description like "allies with", "located in"
+  type      String   @default("related") // related, parent, child, allies, enemies, located_in, etc.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  source    Entry    @relation("SourceRelations", fields: [sourceId], references: [id], onDelete: Cascade)
+  target    Entry    @relation("TargetRelations", fields: [targetId], references: [id], onDelete: Cascade)
+  world     World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId]) // Prevent duplicate connections
+  @@index([worldId])
+}
+
+// ============================================
+// Lore Articles (World Documentation)
+// ============================================
+
+model LoreArticle {
+  id        String   @id @default(cuid())
+  worldId   String
+  world     World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  title     String
+  content   String   @db.Text @default("")
+  category  String   @default("general") // magic, history, culture, rules, general
+  order     Int      @default(0)
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([worldId])
+}
+
+// ============================================
+// Timeline Events (Chronological History)
+// ============================================
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  worldId     String
+  world       World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  content     String   @db.Text @default("")
+  date        String   // Flexible: "Year 342", "Spring 1892", etc.
+  sortOrder   Int      @default(0)
+  importance  String   @default("normal") // minor, normal, major
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([worldId])
+}
